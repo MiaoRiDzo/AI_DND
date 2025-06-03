@@ -4,8 +4,11 @@ import { Character, AiStatSuggestion, Stats, StatName, ChatMessage, Skill, DiceR
 import { FALLBACK_GEMINI_TEXT_MODEL, STAT_NAME_TRANSLATIONS, BASE_STAT_VALUE, STAT_NAMES_ORDERED, DEFAULT_AI_MODEL_ID } from "../constants"; 
 
 let ai: GoogleGenAI | null = null;
-let userProvidedApiKey: string | null = null;
-let isManuallyInitialized = false;
+
+// WARNING: Hardcoding API keys is generally not recommended for security reasons,
+// especially if the code might be exposed or the key has broad permissions.
+// This is done as per specific user request for a personal project.
+const HARDCODED_API_KEY = "AIzaSyCdAeI0fv2uZW363X85JjKzWQsrxViw29I";
 
 const safetySettings = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -15,71 +18,34 @@ const safetySettings = [
 ];
 
 export const getAi = (): GoogleGenAI => {
-  let apiKeyToUse: string | undefined = undefined;
-  let usedManualKey = false;
-
-  // Prioritize environment variable
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY && process.env.API_KEY !== "YOUR_API_KEY_HERE_PLACEHOLDER" && process.env.API_KEY.length >= 10) {
-    apiKeyToUse = process.env.API_KEY;
-  } else if (userProvidedApiKey) { // Fallback to manually provided key
-    apiKeyToUse = userProvidedApiKey;
-    usedManualKey = true;
-  }
-
-  if (!apiKeyToUse) {
-    const errorMsg = "API_KEY for Gemini is not available (neither from env nor manually provided).";
+  if (!HARDCODED_API_KEY || HARDCODED_API_KEY.length < 10) {
+    const errorMsg = "Hardcoded API_KEY for Gemini is invalid or missing.";
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
 
-  // Re-initialize if:
-  // 1. 'ai' is null (first time or after a failed/cleared manual key)
-  // 2. We are attempting to use a manual key, and it hasn't been marked as the source of the current 'ai' instance.
-  if (!ai || (usedManualKey && !isManuallyInitialized) || (!usedManualKey && isManuallyInitialized) ) { // Also re-init if switching from manual to env or vice-versa
+  if (!ai) {
     try {
-      ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-      isManuallyInitialized = usedManualKey; // If we successfully used a manual key, mark it.
-      console.log("Gemini AI client initialized" + (usedManualKey ? " with manually provided key." : " with environment API_KEY."));
+      ai = new GoogleGenAI({ apiKey: HARDCODED_API_KEY });
+      console.log("Gemini AI client initialized with hardcoded API key.");
     } catch (error) {
-      console.error("Failed to initialize GoogleGenAI with the API key:", error);
-      ai = null; // Ensure ai is null if initialization fails
-      isManuallyInitialized = false;
-      // If it was a manual key attempt that failed, clear it so we don't keep trying with a bad key.
-      if (usedManualKey) {
-          userProvidedApiKey = null;
-      }
-      throw new Error(`Failed to initialize Gemini client. ${usedManualKey ? 'The manually provided key might be invalid.' : 'Check environment API_KEY.'}`);
+      console.error("Failed to initialize GoogleGenAI with the hardcoded API key:", error);
+      ai = null; 
+      throw new Error(`Failed to initialize Gemini client with hardcoded key.`);
     }
   }
   return ai;
 };
 
 export const trySetManualApiKey = (key: string): boolean => {
-    if (!key || key.trim().length < 10) {
-        userProvidedApiKey = null;
-        isManuallyInitialized = false;
-        ai = null; 
-        console.warn("Attempted to set an invalid manual API key.");
-        return false;
-    }
-    userProvidedApiKey = key.trim();
-    isManuallyInitialized = false; 
-    ai = null; 
-    try {
-        getAi(); // Attempt to initialize immediately
-        return true; 
-    } catch (error) {
-        // getAi already logs the error
-        userProvidedApiKey = null; // Reset if initialization failed
-        return false; 
-    }
+    console.warn("Manual API key input is disabled as the key is hardcoded.");
+    // Always return true as the hardcoded key is considered 'set'
+    return true; 
 };
 
 export const clearManualApiKey = () => {
-    userProvidedApiKey = null;
-    isManuallyInitialized = false;
-    ai = null; // Clear the AI instance
-    console.log("Manually provided API key cleared.");
+    console.warn("Manual API key clearing is disabled as the key is hardcoded.");
+    // No operation needed as we don't rely on userProvidedApiKey anymore
 };
 
 // Corrected getModelConfig to align with Gemini API guidelines for thinkingConfig
@@ -87,26 +53,6 @@ export const getModelConfig = (modelId: AiModelId, needsJsonResponse: boolean = 
     const config: any = {
         safetySettings: safetySettings,
     };
-
-    // According to Gemini API guidelines:
-    // - thinkingConfig is ONLY available for 'gemini-2.5-flash-preview-04-17'.
-    // - For 'gemini-2.5-flash-preview-04-17' (AiModelId.GeminiActual in this app):
-    //   - To disable thinking (low latency): config.thinkingConfig = { thinkingBudget: 0 };
-    //   - To enable thinking (higher quality, default): OMIT thinkingConfig.
-    // - For 'gemini-2.5-flash-preview-05-20' (AiModelId.GeminiPreview in this app): thinkingConfig should NOT be used.
-
-    // Current app setup (constants.ts -> AVAILABLE_AI_MODELS descriptions):
-    // - AiModelId.GeminiPreview ('05-20'): "Отключен режим 'мышления'" (This implies low latency was intended, but thinkingConfig isn't for this model).
-    // - AiModelId.GeminiActual ('04-17'): "Стандартный режим 'мышления'" (This implies thinking should be enabled, so omit thinkingConfig).
-    
-    // Therefore, based on strict guidelines AND current app model descriptions, thinkingConfig should generally be omitted.
-    // If a specific model profile (e.g., a new "GeminiActual Low Latency") were added for '04-17' and selected, then thinkingBudget: 0 would apply.
-    // The previous implementation incorrectly applied thinkingBudget: 0 to '05-20'.
-
-    // Example: If AiModelId.GeminiActual was *intended* for low latency despite its description:
-    // if (modelId === AiModelId.GeminiActual) {
-    //   config.thinkingConfig = { thinkingBudget: 0 };
-    // }
 
     if (needsJsonResponse) {
         config.responseMimeType = "application/json";
@@ -510,10 +456,10 @@ export const startChatSession = (character: Character, initialHistory?: ChatMess
     }) || [];
 
   const modelToUse = character.selectedAiModelId || DEFAULT_AI_MODEL_ID;
-  const chatConfig = getModelConfig(modelToUse); // This now correctly omits thinkingConfig for '05-20' and '04-17' (unless '04-17' is explicitly for low latency later)
+  const chatConfig = getModelConfig(modelToUse); 
   
   const finalChatConfig = {
-      ...chatConfig, // Includes safetySettings and potentially adjusted thinkingConfig
+      ...chatConfig, 
       systemInstruction: systemInstruction,
   };
 

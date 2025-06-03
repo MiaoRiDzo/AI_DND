@@ -4,22 +4,22 @@ import { Character, Race, Class, Stats, StatName, AiStatSuggestion, Skill, AiMod
 import { 
     AVAILABLE_RACES, AVAILABLE_CLASSES, BASE_STAT_VALUE, STAT_NAMES_ORDERED, 
     STAT_NAME_TRANSLATIONS, MANUAL_POINTS_POOL, MIN_STAT_VALUE, AVAILABLE_AI_MODELS, DEFAULT_AI_MODEL_ID,
-    XP_THRESHOLDS // Import XP_THRESHOLDS
+    XP_THRESHOLDS 
 } from '../constants';
-import { analyzeBackstoryWithGemini, generateCustomRacesAndClassesWithGemini, trySetManualApiKey } from '../services/geminiService';
+import { analyzeBackstoryWithGemini, generateCustomRacesAndClassesWithGemini } from '../services/geminiService'; // trySetManualApiKey removed
 import LoadingSpinner from './LoadingSpinner';
 import { ChevronLeftIcon, ChevronRightIcon, SparklesIcon, PlayerCharacterIcon } from './icons';
 
 interface CharacterCreatorProps {
   onCharacterCreated: (character: Character) => void;
-  apiKeyAvailable: boolean;
-  onManualKeyProvided: (success: boolean) => void;
+  // apiKeyAvailable prop is kept for consistency but will always be true from App
+  // onManualKeyProvided prop is kept, but its effect is now minimal
 }
 
 type WorldSettingOption = 'standard' | 'custom';
 type RaceClassSourceOption = 'standard_races_classes' | 'ai_generated_races_classes';
 
-const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated, apiKeyAvailable, onManualKeyProvided }) => {
+const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated }) => {
   const [step, setStep] = useState(1);
   const [characterName, setCharacterName] = useState('');
   const [isNsfwEnabled, setIsNsfwEnabled] = useState(false); 
@@ -50,10 +50,13 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
   const [statsInitializedForManualStep, setStatsInitializedForManualStep] = useState(false);
   const [isGodModeEnabled, setIsGodModeEnabled] = useState(false);
 
-  // Manual API Key State
-  const [manualApiKeyInput, setManualApiKeyInput] = useState('');
-  const [isTestingKey, setIsTestingKey] = useState(false);
-  const [manualKeyError, setManualKeyError] = useState<string | null>(null);
+  // Manual API Key State - Input UI will be removed, but related logic might still be triggered if not fully pruned
+  // const [manualApiKeyInput, setManualApiKeyInput] = useState(''); // Removed
+  // const [isTestingKey, setIsTestingKey] = useState(false); // Removed
+  // const [manualKeyError, setManualKeyError] = useState<string | null>(null); // Removed
+
+  // API Key is now hardcoded, so always available
+  const apiKeyAvailable = true;
 
 
   const racesToDisplay = raceClassSource === 'ai_generated_races_classes' && generatedRaces ? generatedRaces : AVAILABLE_RACES;
@@ -114,35 +117,19 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     calculateCurrentStats();
   }, [calculateCurrentStats]);
 
-  const handleTestAndSetManualKey = async () => {
-    if (!manualApiKeyInput.trim()) return;
-    setIsTestingKey(true);
-    setManualKeyError(null);
-    const success = trySetManualApiKey(manualApiKeyInput.trim());
-    if (success) {
-        onManualKeyProvided(true);
-        setManualApiKeyInput(""); 
-        setError(null); // Clear general error if key is now OK
-    } else {
-        setManualKeyError("Не удалось проверить ключ. Убедитесь, что он правильный и активен.");
-        onManualKeyProvided(false);
-    }
-    setIsTestingKey(false);
-  };
+  // handleTestAndSetManualKey is no longer called from UI, manual input section removed
 
 
   const handleNextStep = () => {
-    setError(null); // Clear previous general errors
-    setManualKeyError(null); // Clear manual key errors
+    setError(null); 
+    // setManualKeyError(null); // Removed
 
     if (step === 1) {
         if (!characterName.trim()) {
             setError("Пожалуйста, введите имя вашего персонажа."); return;
         }
-        if (!apiKeyAvailable && !manualApiKeyInput.trim()) { // If env key not available and manual key not even attempted
-             // Message for manual key input is already visible if !apiKeyAvailable
-        }
-        if (!selectedAiModelId && apiKeyAvailable) { // Only enforce model selection if a key is present
+        // API key check for manual input removed
+        if (!selectedAiModelId) { 
             setError("Пожалуйста, выберите модель ИИ."); return;
         }
     }
@@ -166,8 +153,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
     if (step === 5 && !backstory.trim()) { 
       setError("Пожалуйста, напишите предысторию. Даже короткая подойдет!"); return;
     }
-    if (step === 6 && !aiSuggestions && apiKeyAvailable && !isLoadingAi) { 
-        setError("Пожалуйста, сначала проанализируйте предысторию с ИИ или пропустите, если анализ недоступен/не удался."); return;
+    if (step === 6 && !aiSuggestions && !isLoadingAi) { // apiKeyAvailable check removed, assumed true
+        setError("Пожалуйста, сначала проанализируйте предысторию с ИИ или пропустите, если анализ не удался."); return;
     }
     if (step === 7 && !isGodModeEnabled) { 
         if (totalPointsDelta > MANUAL_POINTS_POOL) {
@@ -197,10 +184,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
         setError("Пожалуйста, сначала опишите ваш мир, чтобы ИИ мог создать для него расы и классы.");
         return;
     }
-    if (!apiKeyAvailable) {
-        setError("API-ключ не активен. Генерация рас и классов ИИ отключена. Введите ключ на Шаге 1.");
-        return;
-    }
+    // apiKeyAvailable check removed
     setIsGeneratingWorldContent(true);
     setError(null);
     try {
@@ -232,15 +216,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
       setError("Пожалуйста, укажите имя, модель ИИ, расу, класс и предысторию перед анализом ИИ.");
       return;
     }
-    if (!apiKeyAvailable) {
-        setError("API-ключ не активен. Функции ИИ отключены. Введите ключ на Шаге 1.");
-        setAiSuggestions({ 
-            stat_modifiers: STAT_NAMES_ORDERED.reduce((acc, stat) => ({...acc, [stat]: 0}), {}), 
-            world_elements: ["Функции ИИ отключены из-за отсутствия активного API-ключа."],
-            skills: [{ name: "Навыки не сгенерированы", description: "ИИ отключен." }]
-        });
-        return;
-    }
+    // apiKeyAvailable check removed
 
     setIsLoadingAi(true);
     setError(null);
@@ -373,57 +349,17 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
               </p>
             </div>
 
-            {/* AI Model Selection & Key Input */}
+            {/* AI Model Selection - Manual Key Input UI Removed */}
             <div className="mt-6">
               <h3 className="text-lg sm:text-xl font-semibold text-purple-300 mb-3">Выберите Модель ИИ</h3>
-              {!apiKeyAvailable && (
-                <div className="mb-4 p-3 border border-yellow-500 bg-slate-700/50 rounded-lg">
-                  <label htmlFor="manualApiKey" className="block text-sm font-medium text-yellow-300 mb-2">
-                    API-ключ Gemini не найден. Введите ключ для активации ИИ:
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      id="manualApiKey"
-                      type="password"
-                      value={manualApiKeyInput}
-                      onChange={(e) => setManualApiKeyInput(e.target.value)}
-                      placeholder="Ваш API-ключ Gemini"
-                      className="flex-grow p-2 bg-slate-600 border border-slate-500 rounded-lg focus:ring-1 focus:ring-yellow-400 outline-none text-sm"
-                      aria-label="Ручной ввод API ключа Gemini"
-                    />
-                    <button
-                      onClick={handleTestAndSetManualKey}
-                      disabled={isTestingKey || !manualApiKeyInput.trim()}
-                      className={`px-3 py-2 font-semibold rounded-lg text-sm transition-colors ${
-                        isTestingKey || !manualApiKeyInput.trim()
-                          ? 'bg-slate-500 text-slate-400 cursor-not-allowed'
-                          : 'bg-yellow-500 hover:bg-yellow-600 text-slate-900'
-                      }`}
-                      aria-live="polite"
-                    >
-                      {isTestingKey ? <LoadingSpinner size="w-5 h-5" color="text-slate-900" /> : "Применить Ключ"}
-                    </button>
-                  </div>
-                  {manualKeyError && <p className="text-xs text-red-400 mt-2" role="alert">{manualKeyError}</p>}
-                  <p className="text-xs text-slate-400 mt-2">
-                      Ключ будет использован для текущей сессии. Для постоянной настройки используйте переменную окружения API_KEY.
-                  </p>
-                </div>
-              )}
-
-              <div className={`space-y-3 ${!apiKeyAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <div className="space-y-3">
                 {AVAILABLE_AI_MODELS.map(model => (
                   <button
                     key={model.id}
-                    onClick={() => {
-                      if (apiKeyAvailable) { 
-                          setSelectedAiModelId(model.id)
-                      }
-                    }}
-                    disabled={!apiKeyAvailable} 
+                    onClick={() => setSelectedAiModelId(model.id)}
                     className={`w-full text-left p-3 sm:p-4 bg-slate-800 rounded-lg shadow-md hover:bg-slate-700 transition-all duration-200 border-2 ${
                       selectedAiModelId === model.id ? 'border-purple-500 ring-2 ring-purple-500' : 'border-slate-700'
-                    } ${!apiKeyAvailable ? 'pointer-events-none' : ''}`}
+                    }`}
                     aria-pressed={selectedAiModelId === model.id}
                   >
                     <div className="flex items-center">
@@ -437,10 +373,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                 ))}
               </div>
               {AVAILABLE_AI_MODELS.length === 0 && <p className="text-slate-400">Модели ИИ не сконфигурированы.</p>}
-              {!apiKeyAvailable && <p className="text-xs text-yellow-400 mt-2 text-center">Выбор модели будет доступен после ввода и проверки API-ключа.</p>}
             </div>
           </div>
         );
+      // ... other cases remain largely the same, ensure apiKeyAvailable checks are removed or reflect its always-true state
       case 2: // World Setting Step
         return (
           <div>
@@ -497,11 +433,11 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                         {(!generatedRaces || !generatedClasses) && !isGeneratingWorldContent && (
                              <button
                                 onClick={handleGenerateWorldRacesClasses}
-                                disabled={isGeneratingWorldContent || !apiKeyAvailable || !customWorldSettingText.trim()}
+                                disabled={isGeneratingWorldContent || !customWorldSettingText.trim()} // apiKeyAvailable check removed
                                 className="w-full flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 text-sm sm:text-base"
                             >
                                 <SparklesIcon className="w-5 h-5 mr-2" />
-                                {apiKeyAvailable ? "Сгенерировать Расы и Классы для Мира" : "Генерация ИИ отключена (Нет API-ключа)"}
+                                Сгенерировать Расы и Классы для Мира
                             </button>
                         )}
                         {isGeneratingWorldContent && (
@@ -584,11 +520,11 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
             {!aiSuggestions && !isLoadingAi && (
                  <button
                     onClick={handleAnalyzeBackstory}
-                    disabled={isLoadingAi || !apiKeyAvailable}
+                    disabled={isLoadingAi} // apiKeyAvailable check removed
                     className="w-full flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 text-sm sm:text-base"
                 >
                     <SparklesIcon className="w-5 h-5 mr-2" />
-                    {apiKeyAvailable ? "Анализировать предысторию с ИИ" : "Анализ ИИ отключен (Нет активного API-ключа)"}
+                    Анализировать предысторию с ИИ
                 </button>
             )}
             {isLoadingAi && <div className="flex justify-center items-center py-8"><LoadingSpinner size="w-10 h-10 sm:w-12 sm:h-12" /> <p className="ml-3 text-md sm:text-lg">ИИ обдумывает вашу судьбу...</p></div>}
@@ -735,7 +671,7 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
                             <p className="text-md sm:text-lg text-purple-400">{raceRev?.name} {classRev?.name}</p>
                             <p className="text-sm text-slate-300">Уровень 1</p>
                             {isNsfwEnabled && <p className="text-xs sm:text-sm text-red-400 mt-1">(Режим 18+ Активен)</p>}
-                            {modelRev && <p className="text-xs text-slate-400 mt-1">Модель ИИ: {apiKeyAvailable ? modelRev.name : "Не выбрана (Нет API-ключа)"}</p>}
+                            {modelRev && <p className="text-xs text-slate-400 mt-1">Модель ИИ: {modelRev.name}</p>}
                         </div>
                     </div>
                     
@@ -833,10 +769,10 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCharacterCreated,
              <button
                 onClick={handleNextStep}
                 disabled={
-                    (step === 1 && !apiKeyAvailable && !manualApiKeyInput) || // Waiting for manual key input at step 1
-                    (step === 2 && worldSettingOption === 'custom' && raceClassSource === 'ai_generated_races_classes' && (!generatedRaces || !generatedClasses) && !isGeneratingWorldContent && apiKeyAvailable) || 
+                    // (step === 1 && !apiKeyAvailable && !manualApiKeyInput) || // Manual input check removed
+                    (step === 2 && worldSettingOption === 'custom' && raceClassSource === 'ai_generated_races_classes' && (!generatedRaces || !generatedClasses) && !isGeneratingWorldContent) || // apiKeyAvailable check removed
                     (step === 2 && isGeneratingWorldContent) || 
-                    (step === 6 && !aiSuggestions && apiKeyAvailable && !isLoadingAi) || 
+                    (step === 6 && !aiSuggestions && !isLoadingAi) || // apiKeyAvailable check removed
                     (step === 6 && isLoadingAi) 
                 }
                 className="w-full sm:w-auto px-4 py-2 sm:px-6 sm:py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base"

@@ -3,17 +3,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import CharacterCreator from './components/CharacterCreator';
 import ChatInterface, { ChatInterfaceHandle } from './components/ChatInterface';
 import { Character, GamePhase, ChatMessage, FocusTargetInfo, SavedGame } from './types';
-import { API_KEY_ERROR_MESSAGE, SAVE_GAME_KEY } from './constants';
+import { SAVE_GAME_KEY } from './constants'; // API_KEY_ERROR_MESSAGE removed
 import LoadingSpinner from './components/LoadingSpinner';
-// Removed DebugMenu import from here
-import { clearManualApiKey } from './services/geminiService'; 
+// clearManualApiKey import is no longer needed from geminiService as key is hardcoded
 
 const App: React.FC = () => {
   const [gamePhase, setGamePhase] = useState<GamePhase>(GamePhase.Loading);
   const [character, setCharacter] = useState<Character | null>(null);
-  const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean | null>(null); 
+  const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(true); // Key is hardcoded, so always available
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // showGameMenu state removed from App.tsx
+  
   const [forceLevelUpTrigger, setForceLevelUpTrigger] = useState<number>(0);
   const [lastAiResponseTokenCount, setLastAiResponseTokenCount] = useState<number | null>(null);
 
@@ -21,23 +20,15 @@ const App: React.FC = () => {
   const [initialChatHistory, setInitialChatHistory] = useState<ChatMessage[] | undefined>(undefined);
   const [initialFocusTargetInfo, setInitialFocusTargetInfo] = useState<FocusTargetInfo | null | undefined>(undefined);
   
-  const chatInterfaceRef = useRef<ChatInterfaceHandle | null>(null); // This ref might still be used for App-level actions on ChatInterface
+  const chatInterfaceRef = useRef<ChatInterfaceHandle | null>(null); 
   const [lastAutosaveStatus, setLastAutosaveStatus] = useState<{ timestamp: string; success: boolean } | null>(null);
 
 
   const performInitialSetup = useCallback(() => {
-    let keyFromEnv: string | undefined = undefined;
-    if (typeof process !== 'undefined' && process.env) {
-      keyFromEnv = process.env.API_KEY;
-    }
-
-    if (keyFromEnv && keyFromEnv !== "YOUR_API_KEY_HERE_PLACEHOLDER" && keyFromEnv.length > 10) { 
-      setApiKeyAvailable(true);
-      setErrorMessage(null);
-    } else {
-      setApiKeyAvailable(false);
-    }
-    clearManualApiKey(); 
+    // API key is hardcoded, so no need to check environment or manual input
+    setApiKeyAvailable(true);
+    setErrorMessage(null);
+    // clearManualApiKey(); // No longer needed
 
     const savedGameJson = localStorage.getItem(SAVE_GAME_KEY);
     if (savedGameJson) {
@@ -70,19 +61,17 @@ const App: React.FC = () => {
     setInitialFocusTargetInfo(undefined);
     setLastAutosaveStatus(null); 
     setGamePhase(GamePhase.Gameplay);
-    if (!apiKeyAvailable) { 
-        setErrorMessage(API_KEY_ERROR_MESSAGE); 
-    } else {
-        setErrorMessage(null);
-    }
+    // API key is hardcoded, so no specific error message for it needed here
+    setErrorMessage(null); 
   };
 
-  const handleManualKeyProvided = (success: boolean) => {
-    setApiKeyAvailable(success);
-    if (success) {
-        setErrorMessage(null); 
-    }
-  };
+  // const handleManualKeyProvided = (success: boolean) => {
+    // This function is now a no-op as apiKeyAvailable is always true
+    // setApiKeyAvailable(success); 
+    // if (success) {
+    //     setErrorMessage(null); 
+    // }
+  // };
 
   const handleAiResponseTokenCount = (count: number) => {
     setLastAiResponseTokenCount(count);
@@ -98,20 +87,13 @@ const App: React.FC = () => {
       setGamePhase(GamePhase.Gameplay);
       setSavedGameData(null); 
       
-        let keyFromEnv: string | undefined = undefined;
-        if (typeof process !== 'undefined' && process.env) {
-            keyFromEnv = process.env.API_KEY;
-        }
-        clearManualApiKey(); 
-        if (keyFromEnv && keyFromEnv !== "YOUR_API_KEY_HERE_PLACEHOLDER" && keyFromEnv.length > 10) {
-            setApiKeyAvailable(true);
-        } else {
-            setApiKeyAvailable(false); 
-        }
+      // API key is hardcoded, no need to re-check
+      setApiKeyAvailable(true);
+      // clearManualApiKey(); // No longer needed
     }
   };
 
-  const resetToNewGame = useCallback(() => { // Wrapped in useCallback as it's passed down
+  const resetToNewGame = useCallback(() => { 
     localStorage.removeItem(SAVE_GAME_KEY);
     setCharacter(null);
     setInitialChatHistory(undefined);
@@ -119,21 +101,13 @@ const App: React.FC = () => {
     setLastAutosaveStatus(null);
     setGamePhase(GamePhase.CharacterCreation);
     setSavedGameData(null);
-    setForceLevelUpTrigger(0); // Reset trigger
+    setForceLevelUpTrigger(0); 
     setLastAiResponseTokenCount(null);
     
-    let keyFromEnv: string | undefined = undefined;
-    if (typeof process !== 'undefined' && process.env) {
-      keyFromEnv = process.env.API_KEY;
-    }
-    clearManualApiKey(); 
-
-    if (keyFromEnv && keyFromEnv !== "YOUR_API_KEY_HERE_PLACEHOLDER" && keyFromEnv.length > 10) {
-      setApiKeyAvailable(true);
-      setErrorMessage(null);
-    } else {
-      setApiKeyAvailable(false);
-    }
+    // API key is hardcoded, no need to re-check
+    setApiKeyAvailable(true);
+    setErrorMessage(null);
+    // clearManualApiKey(); // No longer needed
   }, []);
 
 
@@ -149,7 +123,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (gamePhase === GamePhase.Loading || apiKeyAvailable === null) {
+  if (gamePhase === GamePhase.Loading) { // apiKeyAvailable === null check removed
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-100 p-4">
         <LoadingSpinner size="w-16 h-16" />
@@ -189,7 +163,7 @@ const App: React.FC = () => {
     );
   }
 
-   if (gamePhase === GamePhase.Error && errorMessage && errorMessage !== API_KEY_ERROR_MESSAGE) {
+   if (gamePhase === GamePhase.Error && errorMessage) { // API_KEY_ERROR_MESSAGE check removed
       return (
            <div className="fixed inset-0 flex items-center justify-center bg-slate-900 bg-opacity-90 z-50 p-4">
               <div className="bg-red-800 p-6 sm:p-8 rounded-lg shadow-2xl text-center max-w-md">
@@ -203,37 +177,31 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-slate-900">
-      {/* DebugMenu button and rendering removed from here */}
-
       {gamePhase === GamePhase.CharacterCreation && (
         <CharacterCreator 
             onCharacterCreated={handleCharacterCreated} 
-            apiKeyAvailable={!!apiKeyAvailable} 
-            onManualKeyProvided={handleManualKeyProvided}
+            // apiKeyAvailable={!!apiKeyAvailable} // This prop is not strictly needed by CharacterCreator anymore
+            // onManualKeyProvided={handleManualKeyProvided} // This prop is not strictly needed by CharacterCreator anymore
         />
       )}
       {gamePhase === GamePhase.Gameplay && character && (
         <ChatInterface 
             ref={chatInterfaceRef}
             character={character} 
-            apiKeyAvailable={!!apiKeyAvailable}
-            forceLevelUpTrigger={forceLevelUpTrigger} // Pass trigger
-            onForceLevelUpTrigger={() => setForceLevelUpTrigger(prev => prev + 1)} // Pass setter-like function
+            apiKeyAvailable={!!apiKeyAvailable} // Will always be true
+            forceLevelUpTrigger={forceLevelUpTrigger} 
+            onForceLevelUpTrigger={() => setForceLevelUpTrigger(prev => prev + 1)} 
             onAiResponseTokenCount={handleAiResponseTokenCount}
-            lastAiResponseTokenCount={lastAiResponseTokenCount} // Pass value
+            lastAiResponseTokenCount={lastAiResponseTokenCount} 
             initialHistory={initialChatHistory}
             initialFocusTarget={initialFocusTargetInfo}
             gamePhase={gamePhase} 
             onAutosaveComplete={handleAutosaveComplete}
-            lastAutosaveStatus={lastAutosaveStatus} // Pass value
-            onStartNewGame={resetToNewGame} // Pass reset function
+            lastAutosaveStatus={lastAutosaveStatus} 
+            onStartNewGame={resetToNewGame} 
         />
       )}
-      {!apiKeyAvailable && gamePhase === GamePhase.Gameplay && ( 
-         <div className="fixed bottom-0 left-0 right-0 p-2 bg-red-800 text-white text-center text-xs sm:text-sm z-[100]">
-            {API_KEY_ERROR_MESSAGE} Функции ИИ будут ограничены.
-        </div>
-      )}
+      {/* Bottom warning about API_KEY not available is removed, as key is hardcoded */}
     </div>
   );
 };
